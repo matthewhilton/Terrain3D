@@ -72,7 +72,7 @@ private:
 	uint32_t _mouse_layer = 32;
 
 	// Physics body and settings
-	RID _static_body;
+	Array _static_bodies = Array();
 	StaticBody3D *_debug_static_body = nullptr;
 	bool _collision_enabled = true;
 	bool _show_debug_collision = false;
@@ -93,7 +93,8 @@ private:
 	void _build(int p_mesh_lods, int p_mesh_size);
 
 	void _build_collision();
-	void _update_collision();
+	void _update_all_collisions();
+	void _update_collision(int region_index);
 	void _destroy_collision();
 
 	void _update_instances();
