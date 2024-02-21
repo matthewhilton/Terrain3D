@@ -63,7 +63,7 @@ private:
 	real_t _cull_margin = 0.0;
 
 	// Physics body and settings
-	RID _static_body;
+	Array _static_bodies = Array();
 	StaticBody3D *_debug_static_body = nullptr;
 	bool _collision_enabled = true;
 	bool _show_debug_collision = false;
@@ -82,7 +82,8 @@ private:
 	void _build(int p_mesh_lods, int p_mesh_size);
 
 	void _build_collision();
-	void _update_collision();
+	void _update_collision(int region_index);
+	void _update_all_collision();
 	void _destroy_collision();
 
 	void _update_instances();
@@ -137,6 +138,7 @@ public:
 	uint32_t get_collision_mask() const { return _collision_mask; };
 	void set_collision_priority(real_t p_priority) { _collision_priority = p_priority; }
 	real_t get_collision_priority() const { return _collision_priority; }
+	void regenerate_collision(Vector3 global_position);
 
 	// Terrain methods
 	void snap(Vector3 p_cam_pos);

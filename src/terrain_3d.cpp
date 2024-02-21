@@ -258,27 +258,35 @@ void Terrain3D::_build_collision() {
 	}
 	_destroy_collision();
 
-	if (!_show_debug_collision) {
+	for(int i = 0; i < _storage->get_region_count(); i++) {
 		LOG(INFO, "Building collision with physics server");
-		_static_body = PhysicsServer3D::get_singleton()->body_create();
+		RID _static_body = PhysicsServer3D::get_singleton()->body_create();
 		PhysicsServer3D::get_singleton()->body_set_mode(_static_body, PhysicsServer3D::BODY_MODE_STATIC);
 		PhysicsServer3D::get_singleton()->body_set_space(_static_body, get_world_3d()->get_space());
 		PhysicsServer3D::get_singleton()->body_attach_object_instance_id(_static_body, get_instance_id());
-	} else {
-		LOG(WARN, "Building debug collision. Disable this mode for releases");
-		_debug_static_body = memnew(StaticBody3D);
-		_debug_static_body->set_name("StaticBody3D");
-		add_child(_debug_static_body, true);
-		_debug_static_body->set_owner(this);
+		_static_bodies.append(_static_body);
 	}
-	_update_collision();
+	_update_all_collision();
 }
+
+void Terrain3D::_update_all_collision() {
+	for(int i = 0; i < _storage->get_region_count(); i++) {
+		_update_collision(i);
+	}
+}
+
+void Terrain3D::regenerate_collision(Vector3 global_position) {
+	// Find the region and only update that one.
+	int region_index = _storage->get_region_index(global_position);
+	_update_collision(region_index);
+}
+
 
 /* Eventually this should be callable to update collision on changes,
  * and especially updating only the ones that have changed. However it's not there yet, so
  * destroy and recreate for now.
  */
-void Terrain3D::_update_collision() {
+void Terrain3D::_update_collision(int region_index) {
 	if (!_collision_enabled || !is_inside_tree()) {
 		return;
 	}
@@ -286,10 +294,12 @@ void Terrain3D::_update_collision() {
 	if (Engine::get_singleton()->is_editor_hint() && !_show_debug_collision) {
 		return;
 	}
+	/* TODO reimeplemtn 
 	if ((!_show_debug_collision && !_static_body.is_valid()) ||
 			(_show_debug_collision && _debug_static_body == nullptr)) {
 		_build_collision();
 	}
+	*/
 
 	int time = Time::get_singleton()->get_ticks_msec();
 	int region_size = _storage->get_region_size();
@@ -299,118 +309,131 @@ void Terrain3D::_update_collision() {
 		hole_const = __FLT_MAX__;
 	}
 
-	for (int i = 0; i < _storage->get_region_count(); i++) {
-		PackedFloat32Array map_data = PackedFloat32Array();
-		map_data.resize(shape_size * shape_size);
+	PackedFloat32Array map_data = PackedFloat32Array();
+	map_data.resize(shape_size * shape_size);
 
-		Vector2i global_offset = Vector2i(_storage->get_region_offsets()[i]) * region_size;
-		Vector3 global_pos = Vector3(global_offset.x, 0, global_offset.y);
+	Vector2i global_offset = Vector2i(_storage->get_region_offsets()[region_index]) * region_size;
+	Vector3 global_pos = Vector3(global_offset.x, 0, global_offset.y);
 
-		Ref<Image> map, map_x, map_z, map_xz;
-		Ref<Image> cmap, cmap_x, cmap_z, cmap_xz;
-		map = _storage->get_map_region(Terrain3DStorage::TYPE_HEIGHT, i);
-		cmap = _storage->get_map_region(Terrain3DStorage::TYPE_CONTROL, i);
-		int region = _storage->get_region_index(Vector3(global_pos.x + region_size, 0, global_pos.z));
-		if (region >= 0) {
-			map_x = _storage->get_map_region(Terrain3DStorage::TYPE_HEIGHT, region);
-			cmap_x = _storage->get_map_region(Terrain3DStorage::TYPE_CONTROL, region);
-		}
-		region = _storage->get_region_index(Vector3(global_pos.x, 0, global_pos.z + region_size));
-		if (region >= 0) {
-			map_z = _storage->get_map_region(Terrain3DStorage::TYPE_HEIGHT, region);
-			cmap_z = _storage->get_map_region(Terrain3DStorage::TYPE_CONTROL, region);
-		}
-		region = _storage->get_region_index(Vector3(global_pos.x + region_size, 0, global_pos.z + region_size));
-		if (region >= 0) {
-			map_xz = _storage->get_map_region(Terrain3DStorage::TYPE_HEIGHT, region);
-			cmap_xz = _storage->get_map_region(Terrain3DStorage::TYPE_CONTROL, region);
-		}
+	Ref<Image> map, map_x, map_z, map_xz;
+	Ref<Image> cmap, cmap_x, cmap_z, cmap_xz;
+	map = _storage->get_map_region(Terrain3DStorage::TYPE_HEIGHT, region_index);
+	cmap = _storage->get_map_region(Terrain3DStorage::TYPE_CONTROL, region_index);
+	int region = _storage->get_region_index(Vector3(global_pos.x + region_size, 0, global_pos.z));
+	if (region >= 0) {
+		map_x = _storage->get_map_region(Terrain3DStorage::TYPE_HEIGHT, region);
+		cmap_x = _storage->get_map_region(Terrain3DStorage::TYPE_CONTROL, region);
+	}
+	region = _storage->get_region_index(Vector3(global_pos.x, 0, global_pos.z + region_size));
+	if (region >= 0) {
+		map_z = _storage->get_map_region(Terrain3DStorage::TYPE_HEIGHT, region);
+		cmap_z = _storage->get_map_region(Terrain3DStorage::TYPE_CONTROL, region);
+	}
+	region = _storage->get_region_index(Vector3(global_pos.x + region_size, 0, global_pos.z + region_size));
+	if (region >= 0) {
+		map_xz = _storage->get_map_region(Terrain3DStorage::TYPE_HEIGHT, region);
+		cmap_xz = _storage->get_map_region(Terrain3DStorage::TYPE_CONTROL, region);
+	}
 
-		for (int z = 0; z < shape_size; z++) {
-			for (int x = 0; x < shape_size; x++) {
-				// Choose array indexing to match triangulation of heightmapshape with the mesh
-				// https://stackoverflow.com/questions/16684856/rotating-a-2d-pixel-array-by-90-degrees
-				// Normal array index rotated Y=0 - shape rotation Y=0 (xform below)
-				// int index = z * shape_size + x;
-				// Array Index Rotated Y=-90 - must rotate shape Y=+90 (xform below)
-				int index = shape_size - 1 - z + x * shape_size;
+	for (int z = 0; z < shape_size; z++) {
+		for (int x = 0; x < shape_size; x++) {
+			// Choose array indexing to match triangulation of heightmapshape with the mesh
+			// https://stackoverflow.com/questions/16684856/rotating-a-2d-pixel-array-by-90-degrees
+			// Normal array index rotated Y=0 - shape rotation Y=0 (xform below)
+			// int index = z * shape_size + x;
+			// Array Index Rotated Y=-90 - must rotate shape Y=+90 (xform below)
+			int index = shape_size - 1 - z + x * shape_size;
 
-				// Set heights on local map, or adjacent maps if on the last row/col
-				if (x < region_size && z < region_size) {
-					map_data[index] = (Util::is_hole(cmap->get_pixel(x, z).r)) ? hole_const : map->get_pixel(x, z).r;
-				} else if (x == region_size && z < region_size) {
-					if (map_x.is_valid()) {
-						map_data[index] = (Util::is_hole(cmap_x->get_pixel(0, z).r)) ? hole_const : map_x->get_pixel(0, z).r;
-					} else {
-						map_data[index] = 0.0f;
-					}
-				} else if (z == region_size && x < region_size) {
-					if (map_z.is_valid()) {
-						map_data[index] = (Util::is_hole(cmap_z->get_pixel(x, 0).r)) ? hole_const : map_z->get_pixel(x, 0).r;
-					} else {
-						map_data[index] = 0.0f;
-					}
-				} else if (x == region_size && z == region_size) {
-					if (map_xz.is_valid()) {
-						map_data[index] = (Util::is_hole(cmap_xz->get_pixel(0, 0).r)) ? hole_const : map_xz->get_pixel(0, 0).r;
-					} else {
-						map_data[index] = 0.0f;
-					}
+			// Set heights on local map, or adjacent maps if on the last row/col
+			if (x < region_size && z < region_size) {
+				map_data[index] = (Util::is_hole(cmap->get_pixel(x, z).r)) ? hole_const : map->get_pixel(x, z).r;
+			} else if (x == region_size && z < region_size) {
+				if (map_x.is_valid()) {
+					map_data[index] = (Util::is_hole(cmap_x->get_pixel(0, z).r)) ? hole_const : map_x->get_pixel(0, z).r;
+				} else {
+					map_data[index] = 0.0f;
+				}
+			} else if (z == region_size && x < region_size) {
+				if (map_z.is_valid()) {
+					map_data[index] = (Util::is_hole(cmap_z->get_pixel(x, 0).r)) ? hole_const : map_z->get_pixel(x, 0).r;
+				} else {
+					map_data[index] = 0.0f;
+				}
+			} else if (x == region_size && z == region_size) {
+				if (map_xz.is_valid()) {
+					map_data[index] = (Util::is_hole(cmap_xz->get_pixel(0, 0).r)) ? hole_const : map_xz->get_pixel(0, 0).r;
+				} else {
+					map_data[index] = 0.0f;
 				}
 			}
 		}
-
-		// Non rotated shape for normal array index above
-		//Transform3D xform = Transform3D(Basis(), global_pos);
-		// Rotated shape Y=90 for -90 rotated array index
-		Transform3D xform = Transform3D(Basis(Vector3(0, 1.0, 0), Math_PI * .5),
-				global_pos + Vector3(region_size, 0, region_size) * .5);
-
-		if (!_show_debug_collision) {
-			RID shape = PhysicsServer3D::get_singleton()->heightmap_shape_create();
-			Dictionary shape_data;
-			shape_data["width"] = shape_size;
-			shape_data["depth"] = shape_size;
-			shape_data["heights"] = map_data;
-			Vector2 min_max = _storage->get_height_range();
-			shape_data["min_height"] = min_max.x;
-			shape_data["max_height"] = min_max.y;
-			PhysicsServer3D::get_singleton()->shape_set_data(shape, shape_data);
-			PhysicsServer3D::get_singleton()->body_add_shape(_static_body, shape);
-			PhysicsServer3D::get_singleton()->body_set_shape_transform(_static_body, i, xform);
-			PhysicsServer3D::get_singleton()->body_set_collision_mask(_static_body, _collision_mask);
-			PhysicsServer3D::get_singleton()->body_set_collision_layer(_static_body, _collision_layer);
-			PhysicsServer3D::get_singleton()->body_set_collision_priority(_static_body, _collision_priority);
-		} else {
-			CollisionShape3D *debug_col_shape;
-			debug_col_shape = memnew(CollisionShape3D);
-			debug_col_shape->set_name("CollisionShape3D");
-			_debug_static_body->add_child(debug_col_shape, true);
-			debug_col_shape->set_owner(this);
-
-			Ref<HeightMapShape3D> hshape;
-			hshape.instantiate();
-			hshape->set_map_width(shape_size);
-			hshape->set_map_depth(shape_size);
-			hshape->set_map_data(map_data);
-			debug_col_shape->set_shape(hshape);
-			debug_col_shape->set_global_transform(xform);
-			_debug_static_body->set_collision_mask(_collision_mask);
-			_debug_static_body->set_collision_layer(_collision_layer);
-			_debug_static_body->set_collision_priority(_collision_priority);
-		}
 	}
-	LOG(DEBUG, "Collision creation time: ", Time::get_singleton()->get_ticks_msec() - time, " ms");
+
+	RID _static_body = _static_bodies[region_index];
+
+	// Clear the previous bodies shape.
+	for(int i = 0; i < PhysicsServer3D::get_singleton()->body_get_shape_count(_static_body); i++) {
+		RID _shape = PhysicsServer3D::get_singleton()->body_get_shape(_static_body, i);
+		PhysicsServer3D::get_singleton()->body_remove_shape(_static_body, i);
+		PhysicsServer3D::get_singleton()->free_rid(_shape);
+	}
+
+	// Non rotated shape for normal array index above
+	//Transform3D xform = Transform3D(Basis(), global_pos);
+	// Rotated shape Y=90 for -90 rotated array index
+	Transform3D xform = Transform3D(Basis(Vector3(0, 1.0, 0), Math_PI * .5),
+			global_pos + Vector3(region_size, 0, region_size) * .5);
+
+	if (!_show_debug_collision) {
+		RID shape = PhysicsServer3D::get_singleton()->heightmap_shape_create();
+		Dictionary shape_data;
+		shape_data["width"] = shape_size;
+		shape_data["depth"] = shape_size;
+		shape_data["heights"] = map_data;
+		Vector2 min_max = _storage->get_height_range();
+		shape_data["min_height"] = min_max.x;
+		shape_data["max_height"] = min_max.y;
+		PhysicsServer3D::get_singleton()->shape_set_data(shape, shape_data);
+		PhysicsServer3D::get_singleton()->body_add_shape(_static_body, shape);
+		PhysicsServer3D::get_singleton()->body_set_shape_transform(_static_body, 0, xform);
+		PhysicsServer3D::get_singleton()->body_set_collision_mask(_static_body, _collision_mask);
+		PhysicsServer3D::get_singleton()->body_set_collision_layer(_static_body, _collision_layer);
+		PhysicsServer3D::get_singleton()->body_set_collision_priority(_static_body, _collision_priority);
+	} else {
+		CollisionShape3D *debug_col_shape;
+		debug_col_shape = memnew(CollisionShape3D);
+		debug_col_shape->set_name("CollisionShape3D");
+		_debug_static_body->add_child(debug_col_shape, true);
+		debug_col_shape->set_owner(this);
+
+		Ref<HeightMapShape3D> hshape;
+		hshape.instantiate();
+		hshape->set_map_width(shape_size);
+		hshape->set_map_depth(shape_size);
+		hshape->set_map_data(map_data);
+		debug_col_shape->set_shape(hshape);
+		debug_col_shape->set_global_transform(xform);
+		_debug_static_body->set_collision_mask(_collision_mask);
+		_debug_static_body->set_collision_layer(_collision_layer);
+		_debug_static_body->set_collision_priority(_collision_priority);
+	}
+
+	LOG(DEBUG, "Collision creation time: ", Time::get_singleton()->get_ticks_msec() - time, " ms for region index ", region_index);
 }
 
 void Terrain3D::_destroy_collision() {
-	if (_static_body.is_valid()) {
-		LOG(INFO, "Freeing physics body");
-		RID shape = PhysicsServer3D::get_singleton()->body_get_shape(_static_body, 0);
-		PhysicsServer3D::get_singleton()->free_rid(shape);
-		PhysicsServer3D::get_singleton()->free_rid(_static_body);
-		_static_body = RID();
+	for(int i = 0; i < _static_bodies.size(); i++) {
+		RID _static_body = _static_bodies[i];
+
+		if (_static_body.is_valid()) {
+			LOG(INFO, "Freeing physics body");
+			RID shape = PhysicsServer3D::get_singleton()->body_get_shape(_static_body, 0);
+			PhysicsServer3D::get_singleton()->free_rid(shape);
+			PhysicsServer3D::get_singleton()->free_rid(_static_body);
+			_static_body = RID();
+		}
 	}
+	_static_bodies.clear();
 
 	if (_debug_static_body != nullptr) {
 		LOG(INFO, "Freeing debug static body");
@@ -436,10 +459,15 @@ void Terrain3D::_update_instances() {
 	if (!_initialized || !_is_inside_world || !is_inside_tree()) {
 		return;
 	}
+	
+	
+	// TODO reimplement
+	/*
 	if (_static_body.is_valid()) {
 		RID _space = get_world_3d()->get_space();
 		PhysicsServer3D::get_singleton()->body_set_space(_static_body, _space);
 	}
+	*/
 
 	RID _scenario = get_world_3d()->get_scenario();
 
@@ -1051,6 +1079,7 @@ void Terrain3D::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_collision_mask"), &Terrain3D::get_collision_mask);
 	ClassDB::bind_method(D_METHOD("set_collision_priority", "priority"), &Terrain3D::set_collision_priority);
 	ClassDB::bind_method(D_METHOD("get_collision_priority"), &Terrain3D::get_collision_priority);
+	ClassDB::bind_method(D_METHOD("regenerate_collision"), &Terrain3D::regenerate_collision);
 
 	// Utility functions
 	ClassDB::bind_static_method("Terrain3D", D_METHOD("get_min_max", "image"), &Util::get_min_max);
