@@ -21,8 +21,8 @@ render_mode blend_mix,depth_draw_opaque,cull_back,diffuse_burley,specular_schlic
  */
 
 // Private uniforms
-uniform float _region_size = 1024.0;
-uniform float _region_texel_size = 0.0009765625; // = 1./1024.
+uniform float _region_size = 512.0;
+uniform float _region_texel_size = 0.001953125; // 1.0 / 512.0
 uniform int _region_map_size = 16;
 uniform int _region_map[256];
 uniform vec2 _region_offsets[256];

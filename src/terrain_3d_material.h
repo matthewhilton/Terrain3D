@@ -62,7 +62,7 @@ private:
 
 	// Cached data from Storage
 	int _texture_count = 0;
-	int _region_size = 1024;
+	int _region_size = 512;
 	Vector2i _region_sizev = Vector2i(_region_size, _region_size);
 	PackedInt32Array _region_map;
 	GeneratedTex _generated_region_blend_map; // 512x512 blurred image of region_map

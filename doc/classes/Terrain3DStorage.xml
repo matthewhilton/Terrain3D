@@ -260,7 +260,7 @@
 			      * region_map - access x,y location to get region id index: [code]region_id = region_map[y*region_map_size + x] - 1[/code]
 			      * region_offsets - access region id index to get x,y location: [code]position = region_offsets[region_id][/code]
 		</member>
-		<member name="region_size" type="int" setter="set_region_size" getter="get_region_size" enum="Terrain3DStorage.RegionSize" default="1024">
+		<member name="region_size" type="int" setter="set_region_size" getter="get_region_size" enum="Terrain3DStorage.RegionSize" default="512">
 		</member>
 		<member name="save_16_bit" type="bool" setter="set_save_16_bit" getter="get_save_16_bit" default="false">
 		</member>

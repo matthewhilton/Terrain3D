@@ -16,7 +16,7 @@ func reset_settings(p_value) -> void:
 		import_offset = 0.0
 		import_scale = 1.0
 		r16_range = Vector2(0, 1)
-		r16_size = Vector2i(1024, 1024)
+		r16_size = Vector2i(512, 512)
 		storage = null
 		material = null
 		texture_list = null
@@ -40,7 +40,7 @@ func update_heights(p_value) -> void:
 @export var import_scale: float = 1.0
 @export var import_offset: float = 0.0
 @export var r16_range: Vector2 = Vector2(0, 1)
-@export var r16_size: Vector2i = Vector2i(1024, 1024)
+@export var r16_size: Vector2i = Vector2i(512, 512)
 @export var run_import: bool = false : set = start_import
 
 func start_import(p_value: bool) -> void:

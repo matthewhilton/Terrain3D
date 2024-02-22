@@ -223,7 +223,7 @@ func update_region_grid() -> void:
 		return
 		
 	region_gizmo.show_rect = false
-	region_gizmo.region_size = 1024
+	region_gizmo.region_size = 512
 	region_gizmo.grid = [Vector2i.ZERO]
 
 

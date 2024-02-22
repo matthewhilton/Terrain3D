@@ -89,8 +89,8 @@ void Terrain3DTextureList::_update_texture_data(bool p_textures, bool p_settings
 			albedo_size = normal_size;
 		}
 		if (albedo_size == Vector2i(0, 0)) {
-			albedo_size = Vector2i(1024, 1024);
-			normal_size = Vector2i(1024, 1024);
+			albedo_size = Vector2i(512, 512);
+			normal_size = Vector2i(512, 512);
 		}
 
 		// Generate TextureArrays and replace nulls with a empty image

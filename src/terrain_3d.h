@@ -63,7 +63,8 @@ private:
 	real_t _cull_margin = 0.0;
 
 	// Physics body and settings
-	Array _static_bodies = Array();
+	//Array _static_bodies = Array();
+	RID _static_body;
 	StaticBody3D *_debug_static_body = nullptr;
 	bool _collision_enabled = true;
 	bool _show_debug_collision = false;

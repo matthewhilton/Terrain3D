@@ -57,8 +57,8 @@ public:
 		//SIZE_64 = 64,
 		//SIZE_128 = 128,
 		//SIZE_256 = 256,
-		//SIZE_512 = 512,
-		SIZE_1024 = 1024,
+		SIZE_512 = 512,
+		//SIZE_1024 = 1024,
 		//SIZE_2048 = 2048,
 	};
 
@@ -72,7 +72,7 @@ private:
 	real_t _version = 0.8; // Set to ensure Godot always saves this
 	bool _modified = false;
 	bool _save_16_bit = false;
-	RegionSize _region_size = SIZE_1024;
+	RegionSize _region_size = SIZE_512;
 	Vector2i _region_sizev = Vector2i(_region_size, _region_size);
 
 	// Stored Data

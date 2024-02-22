@@ -258,14 +258,26 @@ void Terrain3D::_build_collision() {
 	}
 	_destroy_collision();
 
+	LOG(INFO, "Building collision with physics server");
+	_static_body = PhysicsServer3D::get_singleton()->body_create();
+	PhysicsServer3D::get_singleton()->body_set_mode(_static_body, PhysicsServer3D::BODY_MODE_STATIC);
+	PhysicsServer3D::get_singleton()->body_set_space(_static_body, get_world_3d()->get_space());
+	PhysicsServer3D::get_singleton()->body_attach_object_instance_id(_static_body, get_instance_id());
+
+	// Create a heightmap shape per region.
 	for(int i = 0; i < _storage->get_region_count(); i++) {
-		LOG(INFO, "Building collision with physics server");
-		RID _static_body = PhysicsServer3D::get_singleton()->body_create();
-		PhysicsServer3D::get_singleton()->body_set_mode(_static_body, PhysicsServer3D::BODY_MODE_STATIC);
-		PhysicsServer3D::get_singleton()->body_set_space(_static_body, get_world_3d()->get_space());
-		PhysicsServer3D::get_singleton()->body_attach_object_instance_id(_static_body, get_instance_id());
-		_static_bodies.append(_static_body);
+		RID shape = PhysicsServer3D::get_singleton()->heightmap_shape_create();
+		PhysicsServer3D::get_singleton()->body_add_shape(_static_body, shape);
 	}
+
+	if(_debug_static_body) {
+		CollisionShape3D *debug_col_shape;
+		debug_col_shape = memnew(CollisionShape3D);
+		debug_col_shape->set_name("CollisionShape3D");
+		_debug_static_body->add_child(debug_col_shape, true);
+		debug_col_shape->set_owner(this);
+	}
+
 	_update_all_collision();
 }
 
@@ -369,15 +381,6 @@ void Terrain3D::_update_collision(int region_index) {
 		}
 	}
 
-	RID _static_body = _static_bodies[region_index];
-
-	// Clear the previous bodies shape.
-	for(int i = 0; i < PhysicsServer3D::get_singleton()->body_get_shape_count(_static_body); i++) {
-		RID _shape = PhysicsServer3D::get_singleton()->body_get_shape(_static_body, i);
-		PhysicsServer3D::get_singleton()->body_remove_shape(_static_body, i);
-		PhysicsServer3D::get_singleton()->free_rid(_shape);
-	}
-
 	// Non rotated shape for normal array index above
 	//Transform3D xform = Transform3D(Basis(), global_pos);
 	// Rotated shape Y=90 for -90 rotated array index
@@ -385,7 +388,11 @@ void Terrain3D::_update_collision(int region_index) {
 			global_pos + Vector3(region_size, 0, region_size) * .5);
 
 	if (!_show_debug_collision) {
-		RID shape = PhysicsServer3D::get_singleton()->heightmap_shape_create();
+		RID shape = PhysicsServer3D::get_singleton()->body_get_shape(_static_body, region_index);
+		PhysicsServer3D::get_singleton()->body_set_shape_transform(_static_body, region_index, xform);
+		PhysicsServer3D::get_singleton()->body_set_collision_mask(_static_body, _collision_mask);
+		PhysicsServer3D::get_singleton()->body_set_collision_layer(_static_body, _collision_layer);
+		PhysicsServer3D::get_singleton()->body_set_collision_priority(_static_body, _collision_priority);
 		Dictionary shape_data;
 		shape_data["width"] = shape_size;
 		shape_data["depth"] = shape_size;
@@ -394,11 +401,6 @@ void Terrain3D::_update_collision(int region_index) {
 		shape_data["min_height"] = min_max.x;
 		shape_data["max_height"] = min_max.y;
 		PhysicsServer3D::get_singleton()->shape_set_data(shape, shape_data);
-		PhysicsServer3D::get_singleton()->body_add_shape(_static_body, shape);
-		PhysicsServer3D::get_singleton()->body_set_shape_transform(_static_body, 0, xform);
-		PhysicsServer3D::get_singleton()->body_set_collision_mask(_static_body, _collision_mask);
-		PhysicsServer3D::get_singleton()->body_set_collision_layer(_static_body, _collision_layer);
-		PhysicsServer3D::get_singleton()->body_set_collision_priority(_static_body, _collision_priority);
 	} else {
 		CollisionShape3D *debug_col_shape;
 		debug_col_shape = memnew(CollisionShape3D);
@@ -422,18 +424,14 @@ void Terrain3D::_update_collision(int region_index) {
 }
 
 void Terrain3D::_destroy_collision() {
-	for(int i = 0; i < _static_bodies.size(); i++) {
-		RID _static_body = _static_bodies[i];
 
-		if (_static_body.is_valid()) {
-			LOG(INFO, "Freeing physics body");
-			RID shape = PhysicsServer3D::get_singleton()->body_get_shape(_static_body, 0);
-			PhysicsServer3D::get_singleton()->free_rid(shape);
-			PhysicsServer3D::get_singleton()->free_rid(_static_body);
-			_static_body = RID();
-		}
+	if (_static_body.is_valid()) {
+		LOG(INFO, "Freeing physics body");
+		RID shape = PhysicsServer3D::get_singleton()->body_get_shape(_static_body, 0);
+		PhysicsServer3D::get_singleton()->free_rid(shape);
+		PhysicsServer3D::get_singleton()->free_rid(_static_body);
+		_static_body = RID();
 	}
-	_static_bodies.clear();
 
 	if (_debug_static_body != nullptr) {
 		LOG(INFO, "Freeing debug static body");
