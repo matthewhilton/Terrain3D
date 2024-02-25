@@ -93,7 +93,6 @@ private:
 	void _build(int p_mesh_lods, int p_mesh_size);
 
 	void _build_collision();
-	void _update_collision();
 	void _destroy_collision();
 
 	void _update_instances();
@@ -106,6 +105,8 @@ public:
 
 	Terrain3D();
 	~Terrain3D();
+
+	void update_collision(int region_index);
 
 	// Terrain settings
 	String get_version() const { return _version; }
